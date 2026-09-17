@@ -1,0 +1,79 @@
+name: CEREBRON Farm 13 Engineering Systems
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  agents:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {role: SYSTEM_ARCHITECT, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: REQUIREMENTS_ENGINEER, model: huggingface-projects/gemma-2-9b-it}
+          - {role: MECHANICAL_ENGINEER, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: STRUCTURAL_ENGINEER, model: huggingface-projects/gemma-2-9b-it}
+          - {role: THERMAL_ENGINEER, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: FLUID_SYSTEMS_ENGINEER, model: huggingface-projects/gemma-2-9b-it}
+          - {role: ELECTRICAL_ENGINEER, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: CONTROL_ENGINEER, model: huggingface-projects/gemma-2-9b-it}
+          - {role: EMBEDDED_SYSTEMS_ENGINEER, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: RELIABILITY_ENGINEER, model: huggingface-projects/gemma-2-9b-it}
+          - {role: SAFETY_ENGINEER, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: FMEA_SPECIALIST, model: huggingface-projects/gemma-2-9b-it}
+          - {role: MAINTAINABILITY_ENGINEER, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: MANUFACTURING_ENGINEER, model: huggingface-projects/gemma-2-9b-it}
+          - {role: INTEGRATION_ENGINEER, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: VERIFICATION_ENGINEER, model: huggingface-projects/gemma-2-9b-it}
+          - {role: VALIDATION_ENGINEER, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: RED_TEAM_ENGINEER, model: huggingface-projects/gemma-2-9b-it}
+          - {role: REPLICATOR, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: SYNTHESIS_JUDGE, model: huggingface-projects/gemma-2-9b-it}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install gradio_client
+      - name: Run role
+        env:
+          ROLE: ${{ matrix.role }}
+          MODEL: ${{ matrix.model }}
+        run: python worker/agent.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-${{ matrix.role }}
+          path: results/*.json
+
+  omega-fusion:
+    needs: agents
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: agent-*
+          path: packet
+          merge-multiple: true
+      - name: Build evidence packet
+        run: |
+          python - <<'PY'
+          import glob,json,os
+          files=glob.glob('packet/*.json')
+          rows=[]
+          for f in files:
+              try: rows.append(json.load(open(f)))
+              except: pass
+          ok=sum(bool(x.get('success')) for x in rows)
+          families=sorted(set(x.get('model') for x in rows if x.get('success')))
+          out={'roles_received':len(rows),'successful_external_ai_calls':ok,'model_families':families,'status':'UNREVIEWED_EXTERNAL_AGENT_OUTPUT'}
+          os.makedirs('omega',exist_ok=True)
+          json.dump(out,open('omega/summary.json','w'),indent=2)
+          print(json.dumps(out,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engineering-systems-omega-packet
+          path: omega/summary.json
